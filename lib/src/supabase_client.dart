@@ -42,7 +42,9 @@ class SupabaseClient {
   final String authUrl;
   final String storageUrl;
   final String functionsUrl;
-  final Map<String, String> _headers;
+  late final Map<String, String> _headers;
+  
+
   final Client? _httpClient;
 
   late final GoTrueClient auth;
@@ -64,38 +66,39 @@ class SupabaseClient {
   /// Number of retries storage client should do on file failed file uploads.
   final int _storageRetryAttempts;
 
+
   /// Getter for the HTTP headers
-  Map<String, String> get headers {
-    return _headers;
-  }
+  Map<String, String> get headers => _headers;
+
+  String _sanitizeHeaderValue(String value) {
+  return value.replaceAll('\n', '').replaceAll('\r', '');
+}
+
+
 
   /// To apply the new headers in existing realtime channels, manually unsubscribe and resubscribe these channels.
   set headers(Map<String, String> headers) {
     _headers.clear();
+
     _headers.addAll({
       ...Constants.defaultHeaders,
       ..._getAuthHeaders(),
-      ...headers,
+      for (final entry in headers.entries)
+        entry.key: _sanitizeHeaderValue(entry.value),
     });
 
     rest.headers
       ..clear()
       ..addAll(_headers);
-
     functions.headers
       ..clear()
       ..addAll(_headers);
-
     storage.headers
       ..clear()
       ..addAll(_headers);
-
     auth.headers
       ..clear()
       ..addAll(_headers);
-
-    // To apply the new headers in the realtime client,
-    // manually unsubscribe and resubscribe to all channels.
     realtime.headers
       ..clear()
       ..addAll(_headers);
@@ -114,9 +117,9 @@ class SupabaseClient {
   /// [storageRetryAttempts] specifies how many retry attempts there should be to
   ///  upload a file to Supabase storage when failed due to network interruption.
   ///
-  /// [realtimeClientOptions] specifies different options you can pass to `RealtimeClient`.
+  /// [realtimeClientOptions] specifies different options you can pass to RealtimeClient.
   ///
-  /// Pass an instance of `YAJsonIsolate` to [isolate] to use your own persisted
+  /// Pass an instance of YAJsonIsolate to [isolate] to use your own persisted
   /// isolate instance. A new instance will be created if [isolate] is omitted.
   /// {@macro supabase_client}
   SupabaseClient(
@@ -140,13 +143,18 @@ class SupabaseClient {
             ? '${supabaseUrl.split('.')[0]}.functions.${supabaseUrl.split('.')[1]}.${supabaseUrl.split('.')[2]}'
             : '$supabaseUrl/functions/v1',
         schema = schema ?? 'public',
-        _headers = {
-          ...Constants.defaultHeaders,
-          if (headers != null) ...headers
-        },
         _httpClient = httpClient,
         _storageRetryAttempts = storageRetryAttempts,
         _isolate = isolate ?? (YAJsonIsolate()..initialize()) {
+
+    _headers = {
+      for (final entry in {
+        ...Constants.defaultHeaders,
+        if (headers != null) ...headers,
+      }.entries)
+        entry.key: _sanitizeHeaderValue(entry.value),
+    };
+
     auth = _initSupabaseAuthClient(
       autoRefreshToken: autoRefreshToken,
       headers: _headers,
